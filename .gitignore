@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+*.pdf
+*.pkl
+
+.DS_Store
+.idea/
+
 # C extensions
 *.so
 
