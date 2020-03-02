@@ -9,6 +9,7 @@ from numba.types import float32, boolean, uint32, int32, string
 from .sample import SamplesCollection
 from .tree import TreeClassifier
 from .tree_methods import tree_partial_fit, tree_predict
+from .checks import check_X_y, check_array
 
 spec = [
     ('n_features', uint32),
@@ -75,7 +76,6 @@ class OnlineForestClassifierNoPython(object):
 
     def partial_fit(self, X, y):
         n_samples_batch, n_features = X.shape
-
         # We need at least the actual number of nodes + twice the extra samples
 
         # Let's reserve nodes in advance
@@ -160,10 +160,24 @@ class OnlineForestClassifier(object):
         self._fitted = False
 
     def partial_fit(self, X, y):
-        # X = safe_array(X, dtype='float32')
-        # y = safe_array(y, dtype='float32')
-        n_samples, n_features = X.shape
+        X, y = check_X_y(
+            X, y,
+            accept_sparse=False,
+            accept_large_sparse=False,
+            dtype='float32',
+            order='C',
+            copy=False,
+            force_all_finite=True,
+            ensure_2d=True,
+            allow_nd=False,
+            multi_output=False,
+            ensure_min_samples=1,
+            ensure_min_features=1,
+            y_numeric=True,
+            estimator="OnlineForestClassifier"
+        )
 
+        n_samples, n_features = X.shape
         if self.no_python is None:
             self.n_features = n_features
             max_nodes_with_memory_in_tree = \
@@ -206,6 +220,21 @@ class OnlineForestClassifier(object):
             Returns predicted values.
         """
         import numpy as np
+
+        X = check_array(
+            X,
+            accept_sparse=False,
+            accept_large_sparse=False,
+            dtype=['float32'],
+            order='C',
+            copy=False,
+            force_all_finite=True,
+            ensure_2d=True,
+            allow_nd=False,
+            ensure_min_samples=1,
+            ensure_min_features=1,
+            estimator="OnlineForestClassifier"
+        )
 
         scores = np.empty((X.shape[0], self.n_classes), dtype='float32')
         if not self._fitted:
