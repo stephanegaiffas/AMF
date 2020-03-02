@@ -13,7 +13,8 @@ import os
 from sklearn.datasets import make_classification, make_moons
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from amf import OnlineForestClassifier
+from amf.forest import OnlineForestClassifier
+
 
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, widgetbox

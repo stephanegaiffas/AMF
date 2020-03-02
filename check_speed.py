@@ -1,38 +1,23 @@
-
-import numpy as np
-from numpy.random import uniform
-from numba.types import float32, boolean, uint32, uint8, int32, string, \
-    void, Tuple
-
-
-from random import expovariate
-
-from math import log, exp
-from numba import types, typed
-from numba import jitclass, njit
+# Authors: Stephane Gaiffas <stephane.gaiffas@gmail.com>
+# License: GPL 3.0
 
 from time import time
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score
-from sklearn.datasets import make_blobs
-from sklearn.preprocessing import MinMaxScaler
-from amf import OnlineForestClassifier
 
+import numpy as np
+from sklearn.datasets import make_blobs
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import train_test_split
+
+from amf.forest import OnlineForestClassifier
 
 np.set_printoptions(precision=3)
-
 
 n_samples = 5000
 n_features = 100
 n_classes = 2
-# max_iter = 40
-
 
 X, y = make_blobs(n_samples=n_samples, n_features=n_features, cluster_std=3.,
                   centers=n_classes, random_state=123)
-
-
-# X = MinMaxScaler().fit_transform(X)
 
 X_train, X_test, y_train, y_test = \
     train_test_split(X, y, stratify=y, test_size=.3, random_state=42)
@@ -42,7 +27,6 @@ X_test = X_test.astype('float32')
 y_train = y_train.astype('float32')
 y_test = y_test.astype('float32')
 
-
 # Precompilation
 of = OnlineForestClassifier(n_classes=n_classes, seed=1234,
                             use_aggregation=True,
@@ -50,7 +34,6 @@ of = OnlineForestClassifier(n_classes=n_classes, seed=1234,
                             dirichlet=0.5, step=1.)
 of.partial_fit(X_train[:5], y_train[:5])
 of.predict_proba(X_test[:5])
-
 
 repeats = 5
 for repeat in range(1, repeats + 1):

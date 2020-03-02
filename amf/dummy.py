@@ -1,4 +1,5 @@
-# License: BSD 3 clause
+# Authors: Stephane Gaiffas <stephane.gaiffas@gmail.com>
+# License: GPL 3.0
 
 
 import numpy as np
@@ -34,7 +35,8 @@ class OnlineDummyClassifier(object):
         Number of samples seen
     """
 
-    def __init__(self, n_classes: int, dirichlet: float=0.5, clip: bool = True, eps: float = 1e-15):
+    def __init__(self, n_classes: int, dirichlet: float = 0.5,
+                 clip: bool = True, eps: float = 1e-15):
         self.n_classes = n_classes
         self.dirichlet = dirichlet
         self.clip = clip
@@ -65,7 +67,8 @@ class OnlineDummyClassifier(object):
         n_samples = X.shape[0]
         dirichet = self.dirichlet
         n_classes = self.n_classes
-        scores = (self.counts + dirichet) / (self.n_samples + n_classes * dirichet)
+        scores = (self.counts + dirichet) / (
+                    self.n_samples + n_classes * dirichet)
         # scores = self.counts / self.n_samples
         probas = np.tile(scores, reps=(n_samples, 1))
         return probas
