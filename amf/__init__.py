@@ -1,15 +1,11 @@
-# License: BSD 3 clause
+# Authors: Stephane Gaiffas <stephane.gaiffas@gmail.com>
+# License: GPL 3.0
 
-# import tick.base
 
-# from .online_dummy_classifier import OnlineDummyClassifier
-# from .online_forest_classifier import OnlineForestClassifier
-# from .online_forest_regressor import OnlineForestRegressor
-
-from .classifier import OnlineForestClassifier
-
+from .dummy import OnlineDummyClassifier
+from .forest import OnlineForestClassifier
 
 __all__ = [
-#     "OnlineDummyClassifier",
+    "OnlineDummyClassifier",
     "OnlineForestClassifier",
 ]
