@@ -8,7 +8,7 @@ from sklearn.datasets import make_blobs
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from amf.forest import OnlineForestClassifier
+from amf.forest import AMFClassifier
 
 np.set_printoptions(precision=3)
 
@@ -28,20 +28,30 @@ y_train = y_train.astype('float32')
 y_test = y_test.astype('float32')
 
 # Precompilation
-of = OnlineForestClassifier(n_classes=n_classes, seed=1234,
-                            use_aggregation=True,
-                            n_estimators=1, split_pure=True,
-                            dirichlet=0.5, step=1.)
+of = AMFClassifier(
+    n_classes=n_classes,
+    random_state=1234,
+    use_aggregation=True,
+    n_estimators=1,
+    split_pure=True,
+    dirichlet=0.5,
+    step=1.
+)
 of.partial_fit(X_train[:5], y_train[:5])
 of.predict_proba(X_test[:5])
 
 repeats = 5
 for repeat in range(1, repeats + 1):
     print('-' * 16)
-    of = OnlineForestClassifier(n_classes=n_classes, seed=1234,
-                                use_aggregation=True,
-                                n_estimators=20, split_pure=True,
-                                dirichlet=0.5, step=1.)
+    of = AMFClassifier(
+        n_classes=n_classes,
+        random_state=1234,
+        use_aggregation=True,
+        n_estimators=20,
+        split_pure=True,
+        dirichlet=0.5,
+        step=1.
+    )
     t1 = time()
     of.partial_fit(X_train, y_train)
     t2 = time()
