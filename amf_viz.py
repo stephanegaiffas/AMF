@@ -13,7 +13,7 @@ import os
 from sklearn.datasets import make_classification, make_moons
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from amf.forest import OnlineForestClassifier
+from amf.forest import AMFClassifier
 
 
 from bokeh.io import curdoc
@@ -96,10 +96,10 @@ def get_tree(of):
     return df
 
 
-of = OnlineForestClassifier(n_classes=n_classes, seed=1234,
-                            use_aggregation=True,
-                            n_estimators=50, split_pure=True,
-                            dirichlet=0.5, step=1.)
+of = AMFClassifier(n_classes=n_classes, random_state=1234,
+                   use_aggregation=True,
+                   n_estimators=50, split_pure=True,
+                   dirichlet=0.5, step=1.)
 
 dfs = {}
 df_datas = {}

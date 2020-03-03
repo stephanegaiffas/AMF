@@ -11,7 +11,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from tqdm import trange
 
-from amf import OnlineForestClassifier
+from amf import AMFClassifier
 
 logging.basicConfig(
     format='%(asctime)s %(message)s',
@@ -56,9 +56,13 @@ Z = np.zeros(xx.shape)
 cm = plt.cm.RdBu
 cm_bright = ListedColormap(['#FF0000', '#0000FF'])
 
-clf = OnlineForestClassifier(
-    n_classes=n_classes, n_estimators=n_estimators, seed=random_state_clf,
-    step=step, split_pure=split_pure, use_aggregation=use_aggregation
+clf = AMFClassifier(
+    n_classes=n_classes,
+    n_estimators=n_estimators,
+    random_state=random_state_clf,
+    step=step,
+    split_pure=split_pure,
+    use_aggregation=use_aggregation
 )
 
 n_plots = len(save_iterations)

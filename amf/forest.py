@@ -4,29 +4,25 @@
 import numpy as np
 from numba import jitclass
 from numba import types
-from numba.types import float32, boolean, uint32, int32, string
+from numba.types import float32, boolean, uint32, string
 
+from .checks import check_X_y, check_array
 from .sample import SamplesCollection
 from .tree import TreeClassifier
 from .tree_methods import tree_partial_fit, tree_predict
-from .checks import check_X_y, check_array
 
 spec = [
-    ('n_features', uint32),
     ('n_classes', uint32),
+    ('n_features', uint32),
     ('n_estimators', uint32),
     ('step', float32),
-    ('criterion', string),
+    ('loss', string),
     ('use_aggregation', boolean),
     ('dirichlet', float32),
     ('split_pure', boolean),
-    ('min_samples_split', int32),
-    ('max_features', uint32),
-    ('n_threads', uint32),
-    ('seed', uint32),
+    ('n_jobs', uint32),
+    ('random_state', uint32),
     ('verbose', boolean),
-    ('print_every', uint32),
-    ('max_nodes_with_memory_in_tree', uint32),
     ('trees', types.List(TreeClassifier.class_type.instance_type,
                          reflected=True)),
     ('samples', SamplesCollection.class_type.instance_type),
@@ -41,28 +37,32 @@ spec = [
 
 
 @jitclass(spec)
-class OnlineForestClassifierNoPython(object):
+class AMFClassifierNoPython(object):
 
-    def __init__(self, n_features, n_classes, n_estimators, step, criterion,
-                 use_aggregation, dirichlet, split_pure, min_samples_split,
-                 max_features, n_threads, seed, verbose, print_every,
-                 max_nodes_with_memory_in_tree):
+    def __init__(self,
+                 n_classes,
+                 n_features,
+                 n_estimators,
+                 step,
+                 loss,
+                 use_aggregation,
+                 dirichlet,
+                 split_pure,
+                 n_jobs,
+                 random_state,
+                 verbose):
 
         self.n_features = n_features
         self.n_classes = n_classes
         self.n_estimators = n_estimators
         self.step = step
-        self.criterion = criterion
+        self.loss = loss
         self.use_aggregation = use_aggregation
         self.dirichlet = dirichlet
         self.split_pure = split_pure
-        self.min_samples_split = min_samples_split
-        self.max_features = max_features
-        self.n_threads = n_threads
-        self.seed = seed
+        self.n_jobs = n_jobs
+        self.random_state = random_state
         self.verbose = verbose
-        self.print_every = print_every
-        self.max_nodes_with_memory_in_tree = max_nodes_with_memory_in_tree
 
         self.iteration = 0
 
@@ -122,21 +122,99 @@ class OnlineForestClassifierNoPython(object):
                 "You must call ``partial_fit`` before ``predict``.")
 
 
-class OnlineForestClassifier(object):
+class AMFClassifier(object):
+    """Aggregated Mondrian Forest classifier for online learning. This algorithm
+    is truly online, in the sense that a single pass is performed, and one can
+    ask for predictions anytime.
 
-    def __init__(self, n_classes, n_estimators: int = 10, step: float = 1.,
-                 criterion: str = 'log', use_aggregation: bool = True,
-                 dirichlet: float = None, split_pure: bool = False,
-                 min_samples_split: int = -1, max_features: int = -1,
-                 n_threads: int = 1, seed: int = -1,
-                 verbose: bool = True, print_every=1000, memory: int = 512):
+    Parameters
+    ----------
+    n_classes : `int`
+        Number of excepted classes in the labels. This is required since we
+        don't know the number of classes in advance in a online setting.
 
-        # TODO: many attributes can't be changed once the no python object is created
+    n_estimators : `int`, optional (default=10)
+        Number of trees to grow in the forest.
+
+    step : `float`, optional (default=1)
+        Step-size for the aggregation weights. Default is 1 for classification,
+        which is typically the best choice.
+
+    loss : 'str', optional (default='log')
+        The loss used for the computation of the aggregation weights. Only `log`
+        is supported for now, namely the log-loss for multi-class
+        classification.
+
+    use_aggregation : `bool`, optional (default=True)
+        Whether to use aggregation in each tree. It is highly recommended to
+        leave it as `True`.
+
+    dirichlet : `float` or `None`, optional (default=None)
+        Each node in a tree predicts according to the distribution of the labels
+        it contains. This distribution is regularized using a "Jeffreys" prior
+        with parameter `dirichlet`. For each class with `count` labels in the
+        node and `n_samples` samples in it, the prediction of a node is given by
+        (count + dirichlet) / (n_samples + dirichlet * n_classes).
+
+        Default is dirichlet=0.5 for n_classes=2 and dirichlet=0.01 otherwise.
+
+    split_pure : `bool`, optional (default=False)
+        Whether we split nodes that contain only one class of labels. Default is
+        False.
+
+    n_jobs : `int`, optional (default=1)
+        The number of threads used to grow the tree in parallel. This has no
+        effect for now, the default is n_jobs=1, namely single-threaded.
+
+    random_state : `int` or `None`, optional (default=None)
+        Controls the randomness involved in the trees growing, which is a highly
+        randomized process.
+
+    verbose : `bool`, optional (default=True)
+        Whether a bar showing progress for `partial_fit`, `predict_proba` and
+        `predict` should be used.
+
+    Attributes
+    ----------
+    n_classes = `int`
+        Number of excepted classes in the labels.
+
+    n_features : `int`
+        The number of features from the training dataset (passed to ``fit``)
+
+    # TODO: add missing attributes
+
+    Notes
+    -----
+    Note that all the parameters of AMFClassifier become read-only after the
+    first call to `partial_fit`
+
+    References
+    ----------
+    TODO : add the reference of the paper
+    """
+
+    def __init__(self,
+                 n_classes,
+                 n_estimators=10,
+                 step=1.,
+                 loss='log',
+                 use_aggregation=True,
+                 dirichlet=None,
+                 split_pure=False,
+                 n_jobs=1,
+                 random_state=None,
+                 verbose: bool = True):
+
+        # We will instantiate the numba class when data is passed to
+        # `partial_fit`, since we need to know about `n_features` among others
         self.no_python = None
+
         self.n_classes = n_classes
+        self._n_features = None
         self.n_estimators = n_estimators
         self.step = step
-        self.criterion = criterion
+        self.loss = loss
         self.use_aggregation = use_aggregation
 
         if dirichlet is None:
@@ -148,18 +226,15 @@ class OnlineForestClassifier(object):
             self.dirichlet = dirichlet
 
         self.split_pure = split_pure
-        self.min_samples_split = min_samples_split
-        self.max_features = max_features
-        self.n_threads = n_threads
-        self.seed = seed
-        self.verbose = verbose
-        self.print_every = print_every
-        self.memory = memory
+        self.n_jobs = n_jobs
 
-        self.n_features = None
-        self._fitted = False
+        # TODO: deal with random_state
+        self.random_state = 0
+        self.verbose = verbose
 
     def partial_fit(self, X, y):
+        n_samples, n_features = X.shape
+        # First,ensure that X and y are C-contiguous and with float32 dtype
         X, y = check_X_y(
             X, y,
             accept_sparse=False,
@@ -176,32 +251,36 @@ class OnlineForestClassifier(object):
             y_numeric=True,
             estimator="OnlineForestClassifier"
         )
+        # TODO: test that y.min and y.max is in [0, n_classes-1]s
+        # TODO: raise a warning is a label is not present ? This could be
+        #  optional
 
-        n_samples, n_features = X.shape
+        # This is the first call to `partial_fit`, so we need to instantiate
+        # the no python class
         if self.no_python is None:
-            self.n_features = n_features
-            max_nodes_with_memory_in_tree = \
-                int(1024 ** 2 * self.memory
-                    / (8 * self.n_estimators * n_features))
-
-            self.no_python = OnlineForestClassifierNoPython(
-                n_features,
+            self._n_features = n_features
+            # max_nodes_with_memory_in_tree = \
+            #     int(1024 ** 2 * self.memory
+            #         / (8 * self.n_estimators * n_features))
+            self.no_python = AMFClassifierNoPython(
                 self.n_classes,
+                self.n_features,
                 self.n_estimators,
                 self.step,
-                self.criterion,
+                self.loss,
                 self.use_aggregation,
                 self.dirichlet,
                 self.split_pure,
-                self.min_samples_split,
-                self.max_features,
-                self.n_threads,
-                self.seed,
+                self.n_jobs,
+                self.random_state,
                 self.verbose,
-                self.print_every,
-                max_nodes_with_memory_in_tree
             )
-            self._fitted = True
+        else:
+            pass
+            # TODO: test that y.min and y.max is in [0, n_classes-1]
+            # TODO: test that n_features is unchanged
+            # TODO: raise a warning is a label is not present ? This could be
+            #  optional
 
         self.no_python.partial_fit(X, y)
         return self
@@ -237,11 +316,12 @@ class OnlineForestClassifier(object):
         )
 
         scores = np.empty((X.shape[0], self.n_classes), dtype='float32')
-        if not self._fitted:
-            raise RuntimeError("You must call ``fit`` before")
+        if not self.no_python:
+            raise RuntimeError("You must call ``partial_fit`` before")
         else:
             pass
-            # X = safe_array(X, dtype='float32')
+            # TODO: check sur X, check n_features
+            # TODO: X = safe_array(X, dtype='float32')
         self.no_python.predict(X, scores)
         return scores
 
@@ -291,3 +371,153 @@ class OnlineForestClassifier(object):
         }
         df = pd.DataFrame(data, columns=columns)
         return df
+
+    # TODO: code properties for everything
+    @property
+    def n_classes(self):
+        return self._n_classes
+
+    @n_classes.setter
+    def n_classes(self, val):
+        if self.no_python:
+            raise ValueError(
+                "You cannot modify `n_classes` after calling `partial_fit`")
+        else:
+            if not isinstance(val, int):
+                raise ValueError("`n_classes` must be of type `int`")
+            elif val < 2:
+                raise ValueError("`n_classes` must be >= 2")
+            else:
+                self._n_classes = val
+
+    @property
+    def n_features(self):
+        return self._n_classes
+
+    @n_features.setter
+    def n_features(self, val):
+        raise ValueError("`n_features` is a readonly attribute")
+
+    @property
+    def n_estimators(self):
+        return self._n_estimators
+
+    @n_estimators.setter
+    def n_estimators(self, val):
+        if self.no_python:
+            raise ValueError("You cannot modify `n_estimators` after calling "
+                             "`partial_fit`")
+        else:
+            if not isinstance(val, int):
+                raise ValueError("`n_estimators` must be of type `int`")
+            elif val < 1:
+                raise ValueError("`n_estimators` must be >= 1")
+            else:
+                self._n_estimators = val
+
+    @property
+    def n_jobs(self):
+        return self._n_jobs
+
+    @n_jobs.setter
+    def n_jobs(self, val):
+        if self.no_python:
+            raise ValueError("You cannot modify `n_jobs` after calling "
+                             "`partial_fit`")
+        else:
+            if not isinstance(val, int):
+                raise ValueError("`n_jobs` must be of type `int`")
+            elif val < 1:
+                raise ValueError("`n_jobs` must be >= 1")
+            else:
+                self._n_jobs = val
+
+    @property
+    def step(self):
+        return self._step
+
+    @step.setter
+    def step(self, val):
+        if self.no_python:
+            raise ValueError("You cannot modify `step` after calling "
+                             "`partial_fit`")
+        else:
+            if not isinstance(val, float):
+                raise ValueError("`step` must be of type `float`")
+            elif val <= 0:
+                raise ValueError("`step` must be > 0")
+            else:
+                self._step = val
+
+    @property
+    def use_aggregation(self):
+        return self._use_aggregation
+
+    @use_aggregation.setter
+    def use_aggregation(self, val):
+        if self.no_python:
+            raise ValueError("You cannot modify `use_aggregation` after "
+                             "calling `partial_fit`")
+        else:
+            if not isinstance(val, bool):
+                raise ValueError("`use_aggregation` must be of type `bool`")
+            else:
+                self._use_aggregation = val
+
+    @property
+    def split_pure(self):
+        return self._split_pure
+
+    @split_pure.setter
+    def split_pure(self, val):
+        if self.no_python:
+            raise ValueError("You cannot modify `split_pure` after "
+                             "calling `partial_fit`")
+        else:
+            if not isinstance(val, bool):
+                raise ValueError("`split_pure` must be of type `bool`")
+            else:
+                self._split_pure = val
+
+    @property
+    def verbose(self):
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, val):
+        if self.no_python:
+            raise ValueError("You cannot modify `verbose` after "
+                             "calling `partial_fit`")
+        else:
+            if not isinstance(val, bool):
+                raise ValueError("`verbose` must be of type `bool`")
+            else:
+                self._verbose = val
+
+    @property
+    def loss(self):
+        return 'log'
+
+    @loss.setter
+    def loss(self, val):
+        pass
+
+    def __repr__(self):
+        r = "AMFClassifier"
+        r += "(n_classes={n_classes}, ".format(n_classes=self.n_classes)
+        r += "n_estimators={n_estimators}, "\
+            .format(n_estimators=self.n_estimators)
+        r += "step={step}, ".format(step=self.step)
+        r += "loss={loss}, ".format(loss=self.loss)
+        r += "use_aggregation={use_aggregation}, "\
+            .format(use_aggregation=self.use_aggregation)
+        r += "dirichlet={dirichlet}, ".format(dirichlet=self.dirichlet)
+        r += "split_pure={split_pure}, ".format(split_pure=self.split_pure)
+        r += "n_jobs={n_jobs}, ".format(n_jobs=self.n_jobs)
+        r += "random_state={random_state}, "\
+            .format(random_state=self.random_state)
+        r += "verbose={verbose})".format(verbose=self.verbose)
+        return r
+
+    # TODO: properties for dirichlet
+    # TODO: properties for random_state

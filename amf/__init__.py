@@ -3,9 +3,9 @@
 
 
 from .dummy import OnlineDummyClassifier
-from .forest import OnlineForestClassifier
+from .forest import AMFClassifier
 
 __all__ = [
     "OnlineDummyClassifier",
-    "OnlineForestClassifier",
+    "AMFClassifier",
 ]
