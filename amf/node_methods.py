@@ -72,33 +72,55 @@ def node_update_count(tree, idx_node, idx_sample):
 
 @njit
 def node_print(tree, idx_node):
-    print('----------------')
+    print("----------------")
     print(
-        'index:', tree.nodes.index[idx_node],
-        'depth:', tree.nodes.depth[idx_node],
-        'parent:', tree.nodes.parent[idx_node],
-        'left:', tree.nodes.left[idx_node],
-        'right:', tree.nodes.right[idx_node],
-        'is_leaf:', tree.nodes.is_leaf[idx_node],
-        'time:', tree.nodes.time[idx_node]
+        "index:",
+        tree.nodes.index[idx_node],
+        "depth:",
+        tree.nodes.depth[idx_node],
+        "parent:",
+        tree.nodes.parent[idx_node],
+        "left:",
+        tree.nodes.left[idx_node],
+        "right:",
+        tree.nodes.right[idx_node],
+        "is_leaf:",
+        tree.nodes.is_leaf[idx_node],
+        "time:",
+        tree.nodes.time[idx_node],
     )
 
     print(
-        'feature:', tree.nodes.feature[idx_node],
-        'threshold:', tree.nodes.threshold[idx_node],
-        'weight:', tree.nodes.weight[idx_node],
-        'log_tree_weight:', tree.nodes.log_weight_tree[idx_node],
+        "feature:",
+        tree.nodes.feature[idx_node],
+        "threshold:",
+        tree.nodes.threshold[idx_node],
+        "weight:",
+        tree.nodes.weight[idx_node],
+        "log_tree_weight:",
+        tree.nodes.log_weight_tree[idx_node],
     )
 
     print(
-        'n_samples:', tree.nodes.n_samples[idx_node],
-        'counts: [', tree.nodes.counts[idx_node, 0], ',',
-        tree.nodes.counts[idx_node, 1], ']',
-        'memorized:', tree.nodes.memorized[idx_node],
-        'memory_range_min: [', tree.nodes.memory_range_min[idx_node, 0], ',',
-        tree.nodes.memory_range_min[idx_node, 1], ']',
-        'memory_range_max: [', tree.nodes.memory_range_max[idx_node, 0], ',',
-        tree.nodes.memory_range_max[idx_node, 1], ']'
+        "n_samples:",
+        tree.nodes.n_samples[idx_node],
+        "counts: [",
+        tree.nodes.counts[idx_node, 0],
+        ",",
+        tree.nodes.counts[idx_node, 1],
+        "]",
+        "memorized:",
+        tree.nodes.memorized[idx_node],
+        "memory_range_min: [",
+        tree.nodes.memory_range_min[idx_node, 0],
+        ",",
+        tree.nodes.memory_range_min[idx_node, 1],
+        "]",
+        "memory_range_max: [",
+        tree.nodes.memory_range_max[idx_node, 0],
+        ",",
+        tree.nodes.memory_range_max[idx_node, 1],
+        "]",
     )
 
 
@@ -180,19 +202,23 @@ def node_get_child(tree, idx_node, x_t):
         return tree.nodes.right[idx_node]
 
 
-@njit(Tuple((float32, float32))(TreeClassifier.class_type.instance_type, uint32,
-                                uint32))
+@njit(
+    Tuple((float32, float32))(TreeClassifier.class_type.instance_type, uint32, uint32)
+)
 def node_range(tree, idx_node, j):
     # TODO: do the version without memory...
     if tree.nodes.n_samples[idx_node] == 0:
         raise RuntimeError("Node has no range since it has no samples")
     else:
-        return tree.nodes.memory_range_min[idx_node, j], \
-               tree.nodes.memory_range_max[idx_node, j]
+        return (
+            tree.nodes.memory_range_min[idx_node, j],
+            tree.nodes.memory_range_max[idx_node, j],
+        )
 
 
-@njit(float32(TreeClassifier.class_type.instance_type, uint32, float32[::1],
-              float32[::1]))
+@njit(
+    float32(TreeClassifier.class_type.instance_type, uint32, float32[::1], float32[::1])
+)
 def node_compute_range_extension(tree, idx_node, x_t, extensions):
     extensions_sum = 0
     for j in range(tree.n_features):
@@ -225,8 +251,7 @@ def node_compute_split_time(tree, idx_node, idx_sample):
         return 0
 
     x_t = tree.samples.features[idx_sample]
-    extensions_sum = node_compute_range_extension(tree, idx_node, x_t,
-                                                  tree.intensities)
+    extensions_sum = node_compute_range_extension(tree, idx_node, x_t, tree.intensities)
 
     # If x_t extends the current range of the node
     if extensions_sum > 0:
@@ -252,10 +277,17 @@ def node_compute_split_time(tree, idx_node, idx_sample):
     return 0
 
 
-@njit(void(TreeClassifier.class_type.instance_type, uint32, float32, float32,
-           uint32, boolean))
-def node_split(tree, idx_node, split_time, threshold, feature,
-               is_right_extension):
+@njit(
+    void(
+        TreeClassifier.class_type.instance_type,
+        uint32,
+        float32,
+        float32,
+        uint32,
+        boolean,
+    )
+)
+def node_split(tree, idx_node, split_time, threshold, feature, is_right_extension):
     # Create the two splits
     left_new = tree.nodes.add_node(idx_node, split_time)
     right_new = tree.nodes.add_node(idx_node, split_time)

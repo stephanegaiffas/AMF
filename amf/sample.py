@@ -6,9 +6,9 @@ from numba import jitclass
 from numba.types import float32, uint32
 
 spec_samples_collection = [
-    ('features', float32[:, ::1]),
-    ('labels', float32[::1]),
-    ('n_samples', uint32)
+    ("features", float32[:, ::1]),
+    ("labels", float32[::1]),
+    ("n_samples", uint32),
 ]
 
 
@@ -20,7 +20,6 @@ spec_samples_collection = [
 
 @jitclass(spec_samples_collection)
 class SamplesCollection(object):
-
     def __init__(self):
         self.n_samples = 0
 

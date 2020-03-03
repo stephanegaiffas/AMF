@@ -9,16 +9,16 @@ from .node_collection import NodeCollection
 from .sample import SamplesCollection
 
 spec_tree_classifier = [
-    ('samples', SamplesCollection.class_type.instance_type),
-    ('nodes', NodeCollection.class_type.instance_type),
-    ('n_features', uint32),
-    ('n_classes', uint32),
-    ('iteration', uint32),
-    ('use_aggregation', boolean),
-    ('step', float32),
-    ('split_pure', boolean),
-    ('intensities', float32[::1]),
-    ('dirichlet', float32)
+    ("samples", SamplesCollection.class_type.instance_type),
+    ("nodes", NodeCollection.class_type.instance_type),
+    ("n_features", uint32),
+    ("n_classes", uint32),
+    ("iteration", uint32),
+    ("use_aggregation", boolean),
+    ("step", float32),
+    ("split_pure", boolean),
+    ("intensities", float32[::1]),
+    ("dirichlet", float32),
 ]
 
 
@@ -27,7 +27,6 @@ spec_tree_classifier = [
 
 @jitclass(spec_tree_classifier)
 class TreeClassifier(object):
-
     def __init__(self, n_features, n_classes, samples):
         self.samples = samples
 
@@ -41,7 +40,7 @@ class TreeClassifier(object):
         self.iteration = 0
 
         self.use_aggregation = True
-        self.step = 1.
+        self.step = 1.0
         self.split_pure = False
         self.dirichlet = 0.5
         self.intensities = np.empty(n_features, dtype=float32)
@@ -50,12 +49,12 @@ class TreeClassifier(object):
         self.add_root()
 
     def add_root(self):
-        self.add_node(0, 0.)
+        self.add_node(0, 0.0)
 
     def add_node(self, parent, time):
         return self.nodes.add_node(parent, time)
 
     def print(self):
-        print('Hello from jitclass')
+        print("Hello from jitclass")
         print(self.nodes.n_nodes_reserved)
         print(self.nodes.n_nodes)

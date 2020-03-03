@@ -47,7 +47,7 @@ def resize_array(arr, keep, size, ones=False):
         new[:keep] = arr[:keep]
         return new
     else:
-        raise ValueError('resize_array can resize only 1D and 2D arrays')
+        raise ValueError("resize_array can resize only 1D and 2D arrays")
 
 
 # Sadly there is no function to sample for a discrete distribution in numba
@@ -79,8 +79,8 @@ def sample_discrete(distribution):
     negative values that sum to one.
     """
     # Notes
-    U = uniform(0., 1.)
-    cumsum = 0.
+    U = uniform(0.0, 1.0)
+    cumsum = 0.0
     size = distribution.size
     for j in range(size):
         cumsum += distribution[j]

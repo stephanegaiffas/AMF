@@ -9,13 +9,14 @@ from numba.types import float32, boolean, uint32, void
 from numpy.random import uniform
 
 from .node_methods import (
-    node_get_child, node_compute_split_time,
+    node_get_child,
+    node_compute_split_time,
     node_predict,
     node_range,
     node_update_downwards,
     node_split,
     node_update_depth,
-    node_update_weight_tree
+    node_update_weight_tree,
 )
 from .tree import TreeClassifier
 from .utils import sample_discrete
@@ -44,8 +45,7 @@ def tree_go_downwards(tree, idx_sample):
         while True:
             # If it's not the first iteration (otherwise the current node
             # is root with no range), we consider the possibility of a split
-            split_time = node_compute_split_time(tree, idx_current_node,
-                                                 idx_sample)
+            split_time = node_compute_split_time(tree, idx_current_node, idx_sample)
             if split_time > 0:
                 # We split the current node: because the current node is a
                 # leaf, or because we add a new node along the path
@@ -57,16 +57,21 @@ def tree_go_downwards(tree, idx_sample):
                 feature = sample_discrete(tree.intensities)
                 x_tf = x_t[feature]
                 # Is it a right extension of the node ?
-                range_min, range_max = node_range(tree, idx_current_node,
-                                                  feature)
+                range_min, range_max = node_range(tree, idx_current_node, feature)
                 is_right_extension = x_tf > range_max
                 if is_right_extension:
                     threshold = uniform(range_max, x_tf)
                 else:
                     threshold = uniform(x_tf, range_min)
 
-                node_split(tree, idx_current_node, split_time, threshold,
-                           feature, is_right_extension)
+                node_split(
+                    tree,
+                    idx_current_node,
+                    split_time,
+                    threshold,
+                    feature,
+                    is_right_extension,
+                )
 
                 # Update the current node
                 node_update_downwards(tree, idx_current_node, idx_sample, True)
@@ -97,8 +102,7 @@ def tree_go_downwards(tree, idx_sample):
                 if is_leaf:
                     return idx_current_node
                 else:
-                    idx_current_node = node_get_child(tree, idx_current_node,
-                                                      x_t)
+                    idx_current_node = node_get_child(tree, idx_current_node, x_t)
 
 
 @njit(void(TreeClassifier.class_type.instance_type, uint32))
@@ -141,8 +145,9 @@ def tree_get_leaf(tree, x_t):
     return node
 
 
-@njit(void(TreeClassifier.class_type.instance_type, float32[::1], float32[::1],
-           boolean))
+@njit(
+    void(TreeClassifier.class_type.instance_type, float32[::1], float32[::1], boolean)
+)
 def tree_predict(tree, x_t, scores, use_aggregation):
     leaf = tree_get_leaf(tree, x_t)
     if not use_aggregation:

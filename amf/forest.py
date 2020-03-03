@@ -12,21 +12,20 @@ from .tree import TreeClassifier
 from .tree_methods import tree_partial_fit, tree_predict
 
 spec = [
-    ('n_classes', uint32),
-    ('n_features', uint32),
-    ('n_estimators', uint32),
-    ('step', float32),
-    ('loss', string),
-    ('use_aggregation', boolean),
-    ('dirichlet', float32),
-    ('split_pure', boolean),
-    ('n_jobs', uint32),
-    ('random_state', uint32),
-    ('verbose', boolean),
-    ('trees', types.List(TreeClassifier.class_type.instance_type,
-                         reflected=True)),
-    ('samples', SamplesCollection.class_type.instance_type),
-    ('iteration', uint32)
+    ("n_classes", uint32),
+    ("n_features", uint32),
+    ("n_estimators", uint32),
+    ("step", float32),
+    ("loss", string),
+    ("use_aggregation", boolean),
+    ("dirichlet", float32),
+    ("split_pure", boolean),
+    ("n_jobs", uint32),
+    ("random_state", uint32),
+    ("verbose", boolean),
+    ("trees", types.List(TreeClassifier.class_type.instance_type, reflected=True)),
+    ("samples", SamplesCollection.class_type.instance_type),
+    ("iteration", uint32),
 ]
 
 
@@ -38,19 +37,20 @@ spec = [
 
 @jitclass(spec)
 class AMFClassifierNoPython(object):
-
-    def __init__(self,
-                 n_classes,
-                 n_features,
-                 n_estimators,
-                 step,
-                 loss,
-                 use_aggregation,
-                 dirichlet,
-                 split_pure,
-                 n_jobs,
-                 random_state,
-                 verbose):
+    def __init__(
+        self,
+        n_classes,
+        n_features,
+        n_estimators,
+        step,
+        loss,
+        use_aggregation,
+        dirichlet,
+        split_pure,
+        n_jobs,
+        random_state,
+        verbose,
+    ):
 
         self.n_features = n_features
         self.n_classes = n_classes
@@ -70,8 +70,9 @@ class AMFClassifierNoPython(object):
         self.samples = samples
 
         # TODO: reflected lists will be replace by typed list soon...
-        trees = [TreeClassifier(n_features, n_classes, samples) for _ in
-                 range(n_estimators)]
+        trees = [
+            TreeClassifier(n_features, n_classes, samples) for _ in range(n_estimators)
+        ]
         self.trees = trees
 
     def partial_fit(self, X, y):
@@ -101,7 +102,7 @@ class AMFClassifierNoPython(object):
             self.iteration += 1
 
     def predict(self, X, scores):
-        scores.fill(0.)
+        scores.fill(0.0)
         n_samples_batch, _ = X.shape
         if self.iteration > 0:
             scores_tree = np.empty(self.n_classes, float32)
@@ -118,8 +119,7 @@ class AMFClassifierNoPython(object):
                 scores_i /= self.n_estimators
                 # print('scores_i:', scores_i)
         else:
-            raise RuntimeError(
-                "You must call ``partial_fit`` before ``predict``.")
+            raise RuntimeError("You must call ``partial_fit`` before ``predict``.")
 
 
 class AMFClassifier(object):
@@ -194,17 +194,19 @@ class AMFClassifier(object):
     TODO : add the reference of the paper
     """
 
-    def __init__(self,
-                 n_classes,
-                 n_estimators=10,
-                 step=1.,
-                 loss='log',
-                 use_aggregation=True,
-                 dirichlet=None,
-                 split_pure=False,
-                 n_jobs=1,
-                 random_state=None,
-                 verbose: bool = True):
+    def __init__(
+        self,
+        n_classes,
+        n_estimators=10,
+        step=1.0,
+        loss="log",
+        use_aggregation=True,
+        dirichlet=None,
+        split_pure=False,
+        n_jobs=1,
+        random_state=None,
+        verbose: bool = True,
+    ):
 
         # We will instantiate the numba class when data is passed to
         # `partial_fit`, since we need to know about `n_features` among others
@@ -236,11 +238,12 @@ class AMFClassifier(object):
         n_samples, n_features = X.shape
         # First,ensure that X and y are C-contiguous and with float32 dtype
         X, y = check_X_y(
-            X, y,
+            X,
+            y,
             accept_sparse=False,
             accept_large_sparse=False,
-            dtype='float32',
-            order='C',
+            dtype="float32",
+            order="C",
             copy=False,
             force_all_finite=True,
             ensure_2d=True,
@@ -249,7 +252,7 @@ class AMFClassifier(object):
             ensure_min_samples=1,
             ensure_min_features=1,
             y_numeric=True,
-            estimator="OnlineForestClassifier"
+            estimator="OnlineForestClassifier",
         )
         # TODO: test that y.min and y.max is in [0, n_classes-1]s
         # TODO: raise a warning is a label is not present ? This could be
@@ -304,18 +307,18 @@ class AMFClassifier(object):
             X,
             accept_sparse=False,
             accept_large_sparse=False,
-            dtype=['float32'],
-            order='C',
+            dtype=["float32"],
+            order="C",
             copy=False,
             force_all_finite=True,
             ensure_2d=True,
             allow_nd=False,
             ensure_min_samples=1,
             ensure_min_features=1,
-            estimator="OnlineForestClassifier"
+            estimator="OnlineForestClassifier",
         )
 
-        scores = np.empty((X.shape[0], self.n_classes), dtype='float32')
+        scores = np.empty((X.shape[0], self.n_classes), dtype="float32")
         if not self.no_python:
             raise RuntimeError("You must call ``partial_fit`` before")
         else:
@@ -357,17 +360,36 @@ class AMFClassifier(object):
         # is_memorized = nodes.is_memorized[:n_nodes]
         counts = nodes.counts[:n_nodes]
 
-        columns = ['id', 'parent', 'left', 'right', 'depth', 'is_leaf',
-                   'feature', 'threshold', 'time', 'n_samples',
-                   'memory_range_min', 'memory_range_max', 'counts']
+        columns = [
+            "id",
+            "parent",
+            "left",
+            "right",
+            "depth",
+            "is_leaf",
+            "feature",
+            "threshold",
+            "time",
+            "n_samples",
+            "memory_range_min",
+            "memory_range_max",
+            "counts",
+        ]
 
         data = {
-            'id': index, 'parent': parent, 'left': left, 'right': right,
-            'depth': depth, 'feature': feature, 'threshold': threshold,
-            'is_leaf': is_leaf, 'time': time, 'n_samples': n_samples,
-            'memory_range_min': [tuple(t) for t in memory_range_min],
-            'memory_range_max': [tuple(t) for t in memory_range_max],
-            'counts': [tuple(t) for t in counts]
+            "id": index,
+            "parent": parent,
+            "left": left,
+            "right": right,
+            "depth": depth,
+            "feature": feature,
+            "threshold": threshold,
+            "is_leaf": is_leaf,
+            "time": time,
+            "n_samples": n_samples,
+            "memory_range_min": [tuple(t) for t in memory_range_min],
+            "memory_range_max": [tuple(t) for t in memory_range_max],
+            "counts": [tuple(t) for t in counts],
         }
         df = pd.DataFrame(data, columns=columns)
         return df
@@ -381,7 +403,8 @@ class AMFClassifier(object):
     def n_classes(self, val):
         if self.no_python:
             raise ValueError(
-                "You cannot modify `n_classes` after calling `partial_fit`")
+                "You cannot modify `n_classes` after calling `partial_fit`"
+            )
         else:
             if not isinstance(val, int):
                 raise ValueError("`n_classes` must be of type `int`")
@@ -405,8 +428,9 @@ class AMFClassifier(object):
     @n_estimators.setter
     def n_estimators(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `n_estimators` after calling "
-                             "`partial_fit`")
+            raise ValueError(
+                "You cannot modify `n_estimators` after calling " "`partial_fit`"
+            )
         else:
             if not isinstance(val, int):
                 raise ValueError("`n_estimators` must be of type `int`")
@@ -422,8 +446,9 @@ class AMFClassifier(object):
     @n_jobs.setter
     def n_jobs(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `n_jobs` after calling "
-                             "`partial_fit`")
+            raise ValueError(
+                "You cannot modify `n_jobs` after calling " "`partial_fit`"
+            )
         else:
             if not isinstance(val, int):
                 raise ValueError("`n_jobs` must be of type `int`")
@@ -439,8 +464,7 @@ class AMFClassifier(object):
     @step.setter
     def step(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `step` after calling "
-                             "`partial_fit`")
+            raise ValueError("You cannot modify `step` after calling " "`partial_fit`")
         else:
             if not isinstance(val, float):
                 raise ValueError("`step` must be of type `float`")
@@ -456,8 +480,9 @@ class AMFClassifier(object):
     @use_aggregation.setter
     def use_aggregation(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `use_aggregation` after "
-                             "calling `partial_fit`")
+            raise ValueError(
+                "You cannot modify `use_aggregation` after " "calling `partial_fit`"
+            )
         else:
             if not isinstance(val, bool):
                 raise ValueError("`use_aggregation` must be of type `bool`")
@@ -471,8 +496,9 @@ class AMFClassifier(object):
     @split_pure.setter
     def split_pure(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `split_pure` after "
-                             "calling `partial_fit`")
+            raise ValueError(
+                "You cannot modify `split_pure` after " "calling `partial_fit`"
+            )
         else:
             if not isinstance(val, bool):
                 raise ValueError("`split_pure` must be of type `bool`")
@@ -486,8 +512,9 @@ class AMFClassifier(object):
     @verbose.setter
     def verbose(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `verbose` after "
-                             "calling `partial_fit`")
+            raise ValueError(
+                "You cannot modify `verbose` after " "calling `partial_fit`"
+            )
         else:
             if not isinstance(val, bool):
                 raise ValueError("`verbose` must be of type `bool`")
@@ -496,7 +523,7 @@ class AMFClassifier(object):
 
     @property
     def loss(self):
-        return 'log'
+        return "log"
 
     @loss.setter
     def loss(self, val):
@@ -505,17 +532,16 @@ class AMFClassifier(object):
     def __repr__(self):
         r = "AMFClassifier"
         r += "(n_classes={n_classes}, ".format(n_classes=self.n_classes)
-        r += "n_estimators={n_estimators}, "\
-            .format(n_estimators=self.n_estimators)
+        r += "n_estimators={n_estimators}, ".format(n_estimators=self.n_estimators)
         r += "step={step}, ".format(step=self.step)
         r += "loss={loss}, ".format(loss=self.loss)
-        r += "use_aggregation={use_aggregation}, "\
-            .format(use_aggregation=self.use_aggregation)
+        r += "use_aggregation={use_aggregation}, ".format(
+            use_aggregation=self.use_aggregation
+        )
         r += "dirichlet={dirichlet}, ".format(dirichlet=self.dirichlet)
         r += "split_pure={split_pure}, ".format(split_pure=self.split_pure)
         r += "n_jobs={n_jobs}, ".format(n_jobs=self.n_jobs)
-        r += "random_state={random_state}, "\
-            .format(random_state=self.random_state)
+        r += "random_state={random_state}, ".format(random_state=self.random_state)
         r += "verbose={verbose})".format(verbose=self.verbose)
         return r
 
