@@ -5,6 +5,9 @@
 
 import numpy as np
 import pytest
+from sklearn.datasets import make_moons
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
 
 from amf import AMFClassifier
 
@@ -24,8 +27,8 @@ class TestAMFClassifier(object):
 
     def test_n_features(self):
         clf = AMFClassifier(n_classes=2)
-        X = np.random.randn(2, 2).astype("float32")
-        y = np.array([0.0, 1.0]).astype("float32")
+        X = np.random.randn(2, 2)
+        y = np.array([0.0, 1.0])
         clf.partial_fit(X, y)
         assert clf.n_features == 2
         with pytest.raises(ValueError, match="`n_features` is a readonly attribute"):
@@ -56,7 +59,10 @@ class TestAMFClassifier(object):
         )
 
     def test_loss(self):
-        pass
+        amf = AMFClassifier(n_classes=2)
+        assert amf.loss == "log"
+        amf.loss = "other loss"
+        assert amf.loss == "log"
 
     def test_use_aggregation(self):
         self.parameter_test_with_type(
@@ -68,7 +74,16 @@ class TestAMFClassifier(object):
         )
 
     def test_dirichlet(self):
-        pass
+        self.parameter_test_with_min(
+            parameter="dirichlet",
+            valid_val=0.1,
+            invalid_type_val=0,
+            invalid_val=0.0,
+            min_value_strict=0.0,
+            min_value_str="0",
+            mandatory=False,
+            fixed_type=float,
+        )
 
     def test_split_pure(self):
         self.parameter_test_with_type(
@@ -80,7 +95,22 @@ class TestAMFClassifier(object):
         )
 
     def test_random_state(self):
-        pass
+        self.parameter_test_with_min(
+            parameter="random_state",
+            valid_val=4,
+            invalid_type_val=2.0,
+            invalid_val=-1,
+            min_value=0,
+            min_value_str="0",
+            mandatory=False,
+            fixed_type=int,
+        )
+        amf = AMFClassifier(n_classes=2)
+        assert amf.random_state is None
+        assert amf._random_state == -1
+        amf.random_state = 1
+        amf.random_state = None
+        assert amf._random_state == -1
 
     def test_n_jobs(self):
         self.parameter_test_with_min(
@@ -105,28 +135,103 @@ class TestAMFClassifier(object):
 
     def test_repr(self):
         amf = AMFClassifier(n_classes=3)
+        print(repr(amf))
         assert (
             repr(amf) == "AMFClassifier(n_classes=3, n_estimators=10, "
             "step=1.0, loss=log, use_aggregation=True, "
             "dirichlet=0.01, split_pure=False, n_jobs=1, "
-            "random_state=0, verbose=True)"
+            "random_state=None, verbose=True)"
         )
 
         amf.n_estimators = 42
+        print(repr(amf))
         assert (
             repr(amf) == "AMFClassifier(n_classes=3, n_estimators=42, "
             "step=1.0, loss=log, use_aggregation=True, "
             "dirichlet=0.01, split_pure=False, n_jobs=1, "
-            "random_state=0, verbose=True)"
+            "random_state=None, verbose=True)"
         )
 
         amf.verbose = False
+        print(repr(amf))
         assert (
             repr(amf) == "AMFClassifier(n_classes=3, n_estimators=42, "
             "step=1.0, loss=log, use_aggregation=True, "
             "dirichlet=0.01, split_pure=False, n_jobs=1, "
-            "random_state=0, verbose=False)"
+            "random_state=None, verbose=False)"
         )
+
+    def test_partial_fit(self):
+        clf = AMFClassifier(n_classes=2)
+        n_features = 4
+        X = np.random.randn(2, n_features)
+        y = np.array([0.0, 1.0])
+        clf.partial_fit(X, y)
+        assert clf.n_features == n_features
+        assert clf.no_python.iteration == 2
+        assert clf.no_python.samples.n_samples == 2
+        assert clf.no_python.n_features == n_features
+
+        with pytest.raises(ValueError) as exc_info:
+            X = np.random.randn(2, 3)
+            y = np.array([0.0, 1.0])
+            clf.partial_fit(X, y)
+        assert exc_info.type is ValueError
+        assert (
+            exc_info.value.args[0] == "`partial_fit` was first called with "
+            "n_features=4 while n_features=3 in this call"
+        )
+
+        with pytest.raises(
+            ValueError, match="All the values in `y` must be non-negative",
+        ):
+            clf = AMFClassifier(n_classes=2)
+            X = np.random.randn(2, n_features)
+            y = np.array([0.0, -1.0])
+            clf.partial_fit(X, y)
+
+        with pytest.raises(ValueError) as exc_info:
+            clf = AMFClassifier(n_classes=2)
+            X = np.random.randn(2, 3)
+            y = np.array([0.0, 2.0])
+            clf.partial_fit(X, y)
+        assert exc_info.type is ValueError
+        assert exc_info.value.args[0] == "n_classes=2 while y.max()=2"
+
+    def test_predict_proba(self):
+        clf = AMFClassifier(n_classes=2)
+        with pytest.raises(
+            RuntimeError,
+            match="You must call `partial_fit` before calling `predict_proba`",
+        ):
+            X_test = np.random.randn(2, 3)
+            clf.predict_proba(X_test)
+
+        with pytest.raises(ValueError) as exc_info:
+            X = np.random.randn(2, 2)
+            y = np.array([0.0, 1.0])
+            clf.partial_fit(X, y)
+            X_test = np.random.randn(2, 3)
+            clf.predict_proba(X_test)
+        assert exc_info.type is ValueError
+        assert (
+            exc_info.value.args[0] == "`partial_fit` was called with "
+            "n_features=%d while `predict_proba` "
+            "received n_features=%d" % (clf.n_features, 3)
+        )
+
+    def test_performance_on_moons(self):
+        n_samples = 300
+        random_state = 123
+        X, y = make_moons(n_samples=n_samples, noise=0.25, random_state=random_state)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.5, random_state=random_state
+        )
+        clf = AMFClassifier(n_classes=2, random_state=random_state)
+        clf.partial_fit(X_train, y_train)
+        y_pred = clf.predict_proba(X_test)
+        score = roc_auc_score(y_test, y_pred[:, 1])
+        assert score > 0.9
 
     @staticmethod
     def parameter_test_with_min(
@@ -231,8 +336,8 @@ class TestAMFClassifier(object):
 
         clf = AMFClassifier(**get_params(parameter, valid_val))
         # TODO: we should not need to change the dtype here
-        X = np.random.randn(2, 2).astype("float32")
-        y = np.array([0.0, 1.0]).astype("float32")
+        X = np.random.randn(2, 2)
+        y = np.array([0.0, 1.0])
         clf.partial_fit(X, y)
         with pytest.raises(
             ValueError,
