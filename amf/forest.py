@@ -31,6 +31,8 @@ spec = [
 
 # TODO: we can force pre-compilation when creating the nopython forest
 
+# TODO: random_state
+
 
 @jitclass(spec)
 class AMFClassifierNoPython(object):
