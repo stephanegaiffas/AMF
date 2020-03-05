@@ -9,7 +9,7 @@ This `GitHub` repository contains the algorithms described in the paper
 > 
 > arXiv link: http://arxiv.org/abs/1906.10529
 
-It provides mainly the `AMFClassifier` and the `AMFRegressor`, together with a weak 
+It privides mainly the `AMFClassifier` and the `AMFRegressor`, together with a weak 
 baseline called `OnlineDummyClassifier`. 
 
 The `AMF` algorithm is implemented as the class `OnlineForestClassifier` in the `tick.online` module of the `tick` library https://github.com/X-DataInitiative/tick.
