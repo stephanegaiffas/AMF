@@ -1,0 +1,8 @@
+[run]
+branch = True
+source = AMF
+include = */AMF/*
+
+[report]
+exclude_lines =
+    if verbose
