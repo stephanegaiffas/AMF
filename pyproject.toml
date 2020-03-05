@@ -1,7 +1,6 @@
 [tool.poetry]
 name = "AMF"
 version = "0.1.0"
-licence = "GPL 3.0"
 description = "Aggregated Mondrian Forest"
 authors = ["Stéphane Gaïffas <stephane.gaiffas@gmail.com>"]
 
