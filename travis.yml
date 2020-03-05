@@ -1,0 +1,55 @@
+language: python
+python:
+  - "3.6"
+  - "3.7"
+
+stages:
+#  - lint
+  - test
+#  - name: deploy
+#    if: tag IS present
+
+cache:
+  pip: true
+  directories:
+    - $HOME/AMF
+#    - "$HOME/.cache/pre-commit"
+
+
+jobs:
+  include:
+#    - stage: lint
+#      install:
+#        - pip install pre-commit
+#        - pre-commit install-hooks
+#      script:
+#        - pre-commit run --all-files
+    - stage: test
+      install:
+        - pip install --upgrade pip
+        - pip install poetry
+        - poetry install -v
+      script:
+        - pytest -v --cov
+      after_success: coveralls
+#    - stage: deploy
+#      script:
+#        - echo Deploying to PyPI...
+
+#before_deploy:
+#  # User and password environment variables are set as hidden variables through
+#  # the web interface in the project settings.
+#  - pip install --upgrade pip
+#  - pip install poetry
+#  - poetry config http-basic.pypi $PYPI_USER $PYPI_PASS
+#  - poetry build
+
+#deploy:
+#  provider: script
+#  script: poetry publish
+#  skip_cleanup: true
+#  on:
+#    all_branches: true  # Travis recognizes tag names as "branches"
+#    condition: $TRAVIS_BUILD_STAGE_NAME = Deploy
+#    repo: stephanegaiffas/AMF
+#    tags: true
