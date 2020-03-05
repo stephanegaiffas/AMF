@@ -2,9 +2,9 @@
 # License: GPL 3.0
 
 import numpy as np
-from numba import jitclass
+from numba import jitclass, njit
 from numba import types
-from numba.types import float32, boolean, uint32, string
+from numba.types import float32, boolean, uint32, string, void, int32
 
 from .checks import check_X_y, check_array
 from .sample import SamplesCollection
@@ -21,16 +21,13 @@ spec = [
     ("dirichlet", float32),
     ("split_pure", boolean),
     ("n_jobs", uint32),
-    ("random_state", uint32),
+    ("random_state", int32),
     ("verbose", boolean),
     ("trees", types.List(TreeClassifier.class_type.instance_type, reflected=True)),
     ("samples", SamplesCollection.class_type.instance_type),
     ("iteration", uint32),
 ]
 
-
-# TODO: it's a mess, many things to check (check_array) and many things should
-#  be properties in OnlineForestClassifier
 
 # TODO: we can force pre-compilation when creating the nopython forest
 
@@ -69,12 +66,13 @@ class AMFClassifierNoPython(object):
         samples = SamplesCollection()
         self.samples = samples
 
-        # TODO: reflected lists will be replace by typed list soon...
+        # TODO: reflected lists will be replaced by typed list soon...
         trees = [
             TreeClassifier(n_features, n_classes, samples) for _ in range(n_estimators)
         ]
         self.trees = trees
 
+    # TODO: put it outside as a @njit function
     def partial_fit(self, X, y):
         n_samples_batch, n_features = X.shape
         # We need at least the actual number of nodes + twice the extra samples
@@ -101,25 +99,49 @@ class AMFClassifierNoPython(object):
 
             self.iteration += 1
 
-    def predict(self, X, scores):
-        scores.fill(0.0)
-        n_samples_batch, _ = X.shape
-        if self.iteration > 0:
-            scores_tree = np.empty(self.n_classes, float32)
-            for i in range(n_samples_batch):
-                # print('i:', i)
-                scores_i = scores[i]
-                x_i = X[i]
-                # print('x_i:', x_i)
-                # The prediction is simply the average of the predictions
-                for tree in self.trees:
-                    tree_predict(tree, x_i, scores_tree, self.use_aggregation)
-                    # print('scores_tree:', scores_tree)
-                    scores_i += scores_tree
-                scores_i /= self.n_estimators
-                # print('scores_i:', scores_i)
-        else:
-            raise RuntimeError("You must call ``partial_fit`` before ``predict``.")
+    # def predict(self, X, scores):
+    #     scores.fill(0.0)
+    #     n_samples_batch, _ = X.shape
+    #     if self.iteration > 0:
+    #         scores_tree = np.empty(self.n_classes, float32)
+    #         for i in range(n_samples_batch):
+    #             # print('i:', i)
+    #             scores_i = scores[i]
+    #             x_i = X[i]
+    #             # print('x_i:', x_i)
+    #             # The prediction is simply the average of the predictions
+    #             for tree in self.trees:
+    #                 tree_predict(tree, x_i, scores_tree, self.use_aggregation)
+    #                 # print('scores_tree:', scores_tree)
+    #                 scores_i += scores_tree
+    #             scores_i /= self.n_estimators
+    #             # print('scores_i:', scores_i)
+    #     else:
+    #         raise RuntimeError("You must call ``partial_fit`` before ``predict``.")
+
+
+@njit(
+    void(
+        AMFClassifierNoPython.class_type.instance_type, float32[:, ::1], float32[:, ::1]
+    )
+)
+def predict_proba(forest, X, scores):
+    scores.fill(0.0)
+    n_samples_batch, _ = X.shape
+
+    scores_tree = np.empty(forest.n_classes, float32)
+    for i in range(n_samples_batch):
+        # print('i:', i)
+        scores_i = scores[i]
+        x_i = X[i]
+        # print('x_i:', x_i)
+        # The prediction is simply the average of the predictions
+        for tree in forest.trees:
+            tree_predict(tree, x_i, scores_tree, forest.use_aggregation)
+            # print('scores_tree:', scores_tree)
+            scores_i += scores_tree
+        scores_i /= forest.n_estimators
+        # print('scores_i:', scores_i)
 
 
 class AMFClassifier(object):
@@ -231,8 +253,10 @@ class AMFClassifier(object):
         self.n_jobs = n_jobs
 
         # TODO: deal with random_state
-        self.random_state = 0
+        self.random_state = random_state
         self.verbose = verbose
+
+        self._classes = set(range(n_classes))
 
     def partial_fit(self, X, y):
         n_samples, n_features = X.shape
@@ -252,19 +276,19 @@ class AMFClassifier(object):
             ensure_min_samples=1,
             ensure_min_features=1,
             y_numeric=True,
-            estimator="OnlineForestClassifier",
+            estimator="AMFClassifier",
         )
-        # TODO: test that y.min and y.max is in [0, n_classes-1]s
-        # TODO: raise a warning is a label is not present ? This could be
-        #  optional
+
+        if y.min() < 0:
+            raise ValueError("All the values in `y` must be non-negative")
+        y_max = y.max()
+        if y_max not in self._classes:
+            raise ValueError("n_classes=%d while y.max()=%d" % (self.n_classes, y_max))
 
         # This is the first call to `partial_fit`, so we need to instantiate
         # the no python class
         if self.no_python is None:
             self._n_features = n_features
-            # max_nodes_with_memory_in_tree = \
-            #     int(1024 ** 2 * self.memory
-            #         / (8 * self.n_estimators * n_features))
             self.no_python = AMFClassifierNoPython(
                 self.n_classes,
                 self.n_features,
@@ -275,15 +299,16 @@ class AMFClassifier(object):
                 self.dirichlet,
                 self.split_pure,
                 self.n_jobs,
-                self.random_state,
+                self._random_state,
                 self.verbose,
             )
         else:
-            pass
-            # TODO: test that y.min and y.max is in [0, n_classes-1]
-            # TODO: test that n_features is unchanged
-            # TODO: raise a warning is a label is not present ? This could be
-            #  optional
+            _, n_features = X.shape
+            if n_features != self.n_features:
+                raise ValueError(
+                    "`partial_fit` was first called with n_features=%d while "
+                    "n_features=%d in this call" % (self.n_features, n_features)
+                )
 
         self.no_python.partial_fit(X, y)
         return self
@@ -315,17 +340,22 @@ class AMFClassifier(object):
             allow_nd=False,
             ensure_min_samples=1,
             ensure_min_features=1,
-            estimator="OnlineForestClassifier",
+            estimator="AMFClassifier",
         )
 
-        scores = np.empty((X.shape[0], self.n_classes), dtype="float32")
+        n_samples, n_features = X.shape
+        scores = np.empty((n_samples, self.n_classes), dtype="float32")
         if not self.no_python:
-            raise RuntimeError("You must call ``partial_fit`` before")
+            raise RuntimeError(
+                "You must call `partial_fit` before calling `predict_proba`"
+            )
         else:
-            pass
-            # TODO: check sur X, check n_features
-            # TODO: X = safe_array(X, dtype='float32')
-        self.no_python.predict(X, scores)
+            if n_features != self.n_features:
+                raise ValueError(
+                    "`partial_fit` was called with n_features=%d while `predict_proba` "
+                    "received n_features=%d" % (self.n_features, n_features)
+                )
+        predict_proba(self.no_python, X, scores)
         return scores
 
     # def predict(self, X):
@@ -415,7 +445,7 @@ class AMFClassifier(object):
 
     @property
     def n_features(self):
-        return self._n_classes
+        return self._n_features
 
     @n_features.setter
     def n_features(self, val):
@@ -429,7 +459,7 @@ class AMFClassifier(object):
     def n_estimators(self, val):
         if self.no_python:
             raise ValueError(
-                "You cannot modify `n_estimators` after calling " "`partial_fit`"
+                "You cannot modify `n_estimators` after calling `partial_fit`"
             )
         else:
             if not isinstance(val, int):
@@ -446,9 +476,7 @@ class AMFClassifier(object):
     @n_jobs.setter
     def n_jobs(self, val):
         if self.no_python:
-            raise ValueError(
-                "You cannot modify `n_jobs` after calling " "`partial_fit`"
-            )
+            raise ValueError("You cannot modify `n_jobs` after calling `partial_fit`")
         else:
             if not isinstance(val, int):
                 raise ValueError("`n_jobs` must be of type `int`")
@@ -464,7 +492,7 @@ class AMFClassifier(object):
     @step.setter
     def step(self, val):
         if self.no_python:
-            raise ValueError("You cannot modify `step` after calling " "`partial_fit`")
+            raise ValueError("You cannot modify `step` after calling `partial_fit`")
         else:
             if not isinstance(val, float):
                 raise ValueError("`step` must be of type `float`")
@@ -481,13 +509,31 @@ class AMFClassifier(object):
     def use_aggregation(self, val):
         if self.no_python:
             raise ValueError(
-                "You cannot modify `use_aggregation` after " "calling `partial_fit`"
+                "You cannot modify `use_aggregation` after calling `partial_fit`"
             )
         else:
             if not isinstance(val, bool):
                 raise ValueError("`use_aggregation` must be of type `bool`")
             else:
                 self._use_aggregation = val
+
+    @property
+    def dirichlet(self):
+        return self._dirichlet
+
+    @dirichlet.setter
+    def dirichlet(self, val):
+        if self.no_python:
+            raise ValueError(
+                "You cannot modify `dirichlet` after calling `partial_fit`"
+            )
+        else:
+            if not isinstance(val, float):
+                raise ValueError("`dirichlet` must be of type `float`")
+            elif val <= 0:
+                raise ValueError("`dirichlet` must be > 0")
+            else:
+                self._dirichlet = val
 
     @property
     def split_pure(self):
@@ -497,7 +543,7 @@ class AMFClassifier(object):
     def split_pure(self, val):
         if self.no_python:
             raise ValueError(
-                "You cannot modify `split_pure` after " "calling `partial_fit`"
+                "You cannot modify `split_pure` after calling `partial_fit`"
             )
         else:
             if not isinstance(val, bool):
@@ -512,9 +558,7 @@ class AMFClassifier(object):
     @verbose.setter
     def verbose(self, val):
         if self.no_python:
-            raise ValueError(
-                "You cannot modify `verbose` after " "calling `partial_fit`"
-            )
+            raise ValueError("You cannot modify `verbose` after calling `partial_fit`")
         else:
             if not isinstance(val, bool):
                 raise ValueError("`verbose` must be of type `bool`")
@@ -528,6 +572,29 @@ class AMFClassifier(object):
     @loss.setter
     def loss(self, val):
         pass
+
+    @property
+    def random_state(self):
+        if self._random_state == -1:
+            return None
+        else:
+            return self._random_state
+
+    @random_state.setter
+    def random_state(self, val):
+        if self.no_python:
+            raise ValueError(
+                "You cannot modify `random_state` after calling `partial_fit`"
+            )
+        else:
+            if val is None:
+                self._random_state = -1
+            elif not isinstance(val, int):
+                raise ValueError("`random_state` must be of type `int`")
+            elif val < 0:
+                raise ValueError("`random_state` must be >= 0")
+            else:
+                self._random_state = val
 
     def __repr__(self):
         r = "AMFClassifier"
@@ -544,6 +611,3 @@ class AMFClassifier(object):
         r += "random_state={random_state}, ".format(random_state=self.random_state)
         r += "verbose={verbose})".format(verbose=self.verbose)
         return r
-
-    # TODO: properties for dirichlet
-    # TODO: properties for random_state
